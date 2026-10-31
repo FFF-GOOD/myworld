@@ -1,0 +1,41 @@
+name: Tests
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      QT_QPA_PLATFORM: offscreen
+      STUDYPDF_CONFIG_DIR: ${{ runner.temp }}/myworld-tests
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install Qt libraries
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0 libxkbcommon0
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m unittest discover -s tests -v
+  windows-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          architecture: x64
+      - run: python -m pip install -r requirements.txt
+      - name: Imports and window construction
+        run: python -c "import pymupdf; from app import create_application, MainWindow; a=create_application(); w=MainWindow(); assert a.applicationName()=='myworld'; w.close()"

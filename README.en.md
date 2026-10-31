@@ -2,13 +2,13 @@
 
 A local dual-pane PDF workspace for Windows: read the original next to an editable copy, annotate, redact, add text and keep illustrated notes.
 
-Formerly StudyPDF. Version 0.6.1 is the first public release under the new name, preserving .pdfwork projects.
+Formerly StudyPDF. Version 0.6.2 adds viewport-aware PDF drag-and-drop and a working-copy Save as PDF button, preserving .pdfwork projects.
 
 [中文 README](README.md) · [User guide (Chinese)](docs/USER_GUIDE.md)
 
 ## Download
 
-Open this repository's Releases → v0.6.1 → Assets. Download **myworld_0.6.1_Windows_x64.zip**, extract everything and run **Start_myworld.bat**.
+Open this repository's Releases → v0.6.2 → Assets. Download **myworld_0.6.2_Windows_x64.zip**, extract everything and run **Start_myworld.bat**.
 
 Windows 10/11 x64. The portable ZIP includes dependencies. Automatic Source code archives do not.
 

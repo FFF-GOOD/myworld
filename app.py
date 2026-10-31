@@ -21,6 +21,7 @@ from notebook import Notebook
 from floating_tools import ColorPopover,SelectionTools
 from project_links import discover, remember
 from brand import APP_NAME, VERSION
+from file_drop import PDFFileDropFilter
 from comment_cards import CommentManager
 
 
@@ -88,6 +89,13 @@ class PDFView(QGraphicsView):
         self.inline_editor = None
         self.editor_drag = None
         self.setScene(QGraphicsScene(self))
+        self.setAcceptDrops(True)
+        self.viewport().setAcceptDrops(True)
+        self.drop_hint=QLabel('将 PDF 拖到这里即可打开\n也可以点击左上角“打开 PDF”',self.viewport())
+        self.drop_hint.setAlignment(Qt.AlignCenter)
+        self.drop_hint.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.drop_hint.setStyleSheet('color:#748098;font-size:15px;background:transparent;')
+
         self.setFrameShape(QGraphicsView.NoFrame)
         self.setBackgroundBrush(QColor("#e5e8ee"))
         self.setRenderHint(QPainter.SmoothPixmapTransform)
@@ -120,6 +128,7 @@ class PDFView(QGraphicsView):
         self.overlays.clear()
         self.wanted.clear()
         self.session, self.rotation, self.zoom = session, rotation, zoom
+        self.drop_hint.setVisible(session is None)
         if session is None:
             return
         sizes = [page.rect * pdf.Matrix(1, 1).prerotate(rotation) for page in session.doc]
@@ -143,6 +152,7 @@ class PDFView(QGraphicsView):
     def resizeEvent(self, event):
         if hasattr(self.window(),'hide_context'):self.window().hide_context()
         super().resizeEvent(event)
+        if hasattr(self,"drop_hint"):self.drop_hint.setGeometry(self.viewport().rect())
         if hasattr(self, "timer"):
             self.timer.start(65)
 
@@ -551,6 +561,12 @@ class Pane(QWidget):
         header=QWidget();row=QHBoxLayout(header);row.setContentsMargins(0,0,5,0);row.setSpacing(2)
         title.setSizePolicy(QSizePolicy.Ignored,QSizePolicy.Preferred)
         row.addWidget(title,1)
+        self.export_button=None
+        if edited:
+            self.export_button=QPushButton('保存为 PDF…')
+            self.export_button.setFlat(True);self.export_button.setFocusPolicy(Qt.NoFocus)
+            self.export_button.setToolTip('将当前工作副本导出为标准 PDF，可用其他阅读器打开 · Ctrl+E')
+            row.addWidget(self.export_button)
         self.swap_button=QPushButton('⇄ 交换两栏');self.swap_button.setFlat(True)
         self.swap_button.setFocusPolicy(Qt.NoFocus)
         self.swap_button.setToolTip('交换原始 PDF 与工作副本的位置 · Ctrl+Shift+X')
@@ -625,6 +641,7 @@ class MainWindow(QMainWindow):
         self.color_target=None
         for view in self.views:view.comments=CommentManager(self,view)
         for pane in (self.original,self.edited):pane.swap_button.clicked.connect(self.swap)
+        self.edited.export_button.clicked.connect(self.export)
         self.active_view = self.edited.view
         for view in self.views:
             view.activated.connect(self.activate_view)
@@ -635,10 +652,11 @@ class MainWindow(QMainWindow):
             view.moved.connect(self.synchronize)
             view.zoom_requested.connect(lambda factor: self.set_zoom(self.zoom*factor))
             view.selection_changed.connect(lambda text,v=view:self.selected_text(text,v))
-        self.statusBar().showMessage("打开 PDF 开始阅读。V 选择文字，H 拖动；Ctrl+滚轮缩放。")
+        self.statusBar().showMessage("将 PDF 拖到窗口任一区域，或点击“打开 PDF”。Ctrl+E 导出可供其他阅读器打开的工作副本。")
         self.reading_status = QLabel("双栏同步")
         self.statusBar().addPermanentWidget(self.reading_status)
         self.setAcceptDrops(True)
+        self.file_drop=PDFFileDropFilter(self)
         self.refresh()
 
     @property
@@ -661,7 +679,8 @@ class MainWindow(QMainWindow):
         self.load_action = self.action("打开记录", self.load_project, "Ctrl+Shift+O", "load")
         self.save_action = self.action("保存记录", self.save_project, "Ctrl+S", "save")
         self.save_original_action = self.action("保存原稿",self.save_original,"Ctrl+Alt+S","source")
-        self.export_action = self.action("导出 PDF", self.export, "Ctrl+E", "export")
+        self.export_action = self.action("导出副本 PDF", self.export, "Ctrl+E", "export")
+        self.export_action.setToolTip("保存当前工作副本为标准 PDF，包含批注、补充文字和擦除；可用福昕等阅读器打开。")
         for action in (self.open_action, self.load_action, self.save_action, self.save_original_action, self.export_action):
             files.addAction(action)
         files.addSeparator()
@@ -784,6 +803,7 @@ class MainWindow(QMainWindow):
             if active:
                 allowed = True if name in {"select", "hand"} else self.session.can_copy if name=="capture" else self.session.can_modify if name in {"rect", "brush"} else self.session.can_modify if name=="text" else self.session.can_annotate
             action.setEnabled(bool(allowed))
+        self.edited.export_button.setEnabled(active)
         self.copy_action.setEnabled(active and self.session.can_copy)
         self.quote_action.setEnabled(active and self.session.can_copy)
         self.finish_text_action.setEnabled(active and any(v.inline_editor for v in self.views))
@@ -1497,18 +1517,20 @@ class MainWindow(QMainWindow):
         if not self.finish_inline():return
         if not self.session:
             return
+        self.notebook.sync()
         has_erasing = any(op["kind"] == "erase" for op in self.session.history[:self.session.cursor])
         if has_erasing:
             answer = QMessageBox.question(self, "导出区域脱敏 PDF", "导出会实际移除擦除区域的内容。复杂矢量图形相交时可能被按对象整体移除，编辑栏已预览此效果。\n\n导出后的区域删除不能恢复；原稿和工作记录仍可继续编辑。是否继续？",
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if answer != QMessageBox.Yes:
                 return
-        path, _ = QFileDialog.getSaveFileName(self, "导出批注和擦除结果", str(self.session.source.with_name(self.session.source.stem+"_edited.pdf")), "PDF (*.pdf)")
+        path, _ = QFileDialog.getSaveFileName(self, "保存工作副本为 PDF（可用其他阅读器打开）", str(self.session.source.with_name(self.session.source.stem+"_工作副本.pdf")), "PDF (*.pdf)")
         if not path:
             return
         if not path.lower().endswith(".pdf"):
             path += ".pdf"
-        progress = QProgressDialog("正在生成 PDF…", "", 0, len(self.session.doc), self)
+        record_saved=self.save_project(quiet=True,finish_text=False)
+        progress = QProgressDialog("正在保存工作副本 PDF…", "", 0, len(self.session.doc), self)
         progress.setCancelButton(None)
         progress.setWindowModality(Qt.ApplicationModal)
         progress.setMinimumDuration(0)
@@ -1519,7 +1541,10 @@ class MainWindow(QMainWindow):
                 QApplication.processEvents(QEventLoop.ExcludeUserInputEvents)
             self.session.export(path, update)
             progress.close()
-            QMessageBox.information(self, "导出完成", f"已生成：\n{path}\n\n标准批注可在其他 PDF 阅读器中查看。\n原稿未修改；要继续撤销，请另行保存工作记录。")
+            record_message=('工作记录已保存；回到 myworld 时打开原 PDF 即可继续编辑。' if record_saved else
+                            'PDF 已保存，但工作记录尚未保存成功。请使用“文件 → 记录另存为”保留撤销历史和图文笔记。')
+            QMessageBox.information(self, "工作副本 PDF 已保存",
+                f"已生成：\n{path}\n\n可以直接用福昕等 PDF 阅读器打开，查看批注、添加的文字及擦除结果，无需运行 myworld。\n原始 PDF 未修改。\n\n"+record_message)
         except Exception as exc:
             progress.close()
             self.error(exc)
@@ -1538,25 +1563,19 @@ class MainWindow(QMainWindow):
             'A 高亮，U 下划线，D 删除线，P 画笔；R/B 在工作副本擦除。\n'
             'Ctrl+Z 撤销，Ctrl+Y 重做。F8 显示笔记，Ctrl+Shift+N 摘录到当前笔记。\n'
             '笔记图片：选中后拖右下角或输入宽度；评论卡片：拖动标题移动，悬停指向原文，点击继续编辑。\n'
+            '把本地 PDF 拖到两栏、侧栏或笔记区域即可打开，源文件不会被移动。\n'
+            '工作副本标题旁“保存为 PDF”或 Ctrl+E 可导出供其他阅读器打开的标准 PDF。\n'
             '打开 PDF 自动匹配工作记录；完成的操作和笔记约 2 秒后自动保存。\n'
             'Ctrl+S 保存记录，Ctrl+Shift+S 另存记录，Ctrl+Alt+S 保存原稿，Ctrl+E 导出副本。\n'
             '写回原稿后该次原稿操作退出撤销历史，保留上一版 .bak；工作副本历史保留。\n'
             '导出擦除会实际移除内容；复杂矢量图形相交时可能整体移除。')
-
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-
-    def dropEvent(self, event):
-        paths = [u.toLocalFile() for u in event.mimeData().urls()]
-        if paths and paths[0].lower().endswith(".pdf"):
-            self.open_file(paths[0])
 
     def closeEvent(self, event):
         if self.busy or not self.maybe_save():
             event.ignore()
             return
         self.autosave_timer.stop()
+        self.file_drop.detach()
         if self.session:
             self.renderer.stop()
             self.session.close()
