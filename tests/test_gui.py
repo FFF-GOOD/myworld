@@ -224,8 +224,13 @@ class RevisionGuiTests(GuiTests):
         w=self.window
         dialog=TextDialog(w)
         def type_text():
+            # Offscreen Qt may not activate a modal window before a short timer fires.
+            dialog.activateWindow();QApplication.setActiveWindow(dialog)
+            dialog.editor.setFocus(Qt.OtherFocusReason)
             QTest.keyClicks(dialog.editor,'HIGHLIGHT VALID TEXT')
             QTest.keyClick(dialog.editor,Qt.Key_Return,Qt.ControlModifier)
+        deadline=QTimer(dialog);deadline.setSingleShot(True);deadline.timeout.connect(dialog.reject)
+        dialog.finished.connect(deadline.stop);deadline.start(2000)
         QTimer.singleShot(20,type_text)
         self.assertEqual(dialog.exec(),1)
         self.assertEqual(w.session.cursor,0)
