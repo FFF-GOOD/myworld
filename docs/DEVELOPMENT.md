@@ -25,7 +25,7 @@ GitHub Actions 提供 Ubuntu 离屏测试与 Windows 依赖导入/窗口构造�
 .\.venv\Scripts\python.exe build_portable.py
 ~~~
 
-默认缓存 .build-cache/win_wheels，Python 包 .build-cache/python-3.12.10-embed-amd64.zip，输出 dist/myworld_0.6.1_Windows_x64.zip（版本随 brand.py 变化）。
+默认缓存 .build-cache/win_wheels，Python 包 .build-cache/python-3.12.10-embed-amd64.zip，输出 dist/myworld_0.6.2_Windows_x64.zip（版本随 brand.py 变化）。
 
 首次联网获取固定官方 Windows wheel 与 Python 嵌入式发行包。检查 wheel RECORD、x64 PE 头及本机库依赖闭包；构建过程不运行 Windows 程序。完整包包含应用源码、文档、测试、示例、许可与运行环境。
 

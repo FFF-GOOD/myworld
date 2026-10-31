@@ -10,6 +10,7 @@
 | floating_tools.py / comment_cards.py | 小栏、颜色、常驻评论 |
 | notebook.py | 图文笔记、图片去重、来源链接 |
 | project_links.py | PDF 与记录的精确关联 |
+| file_drop.py | 窗口范围的文件拖放过滤，覆盖子视图且保留普通笔记图片操作 |
 | brand.py | 产品显示名称与版本 |
 | build_portable.py | Windows 打包 |
 
@@ -27,4 +28,4 @@
 - StudyPDF/associations.json 与 STUDYPDF_CONFIG_DIR；
 - .studypdf.bak 备份扩展名。
 
-这些不是用户可见品牌。不要全局替换它们；变更须另做迁移。0.6.1 未更改项目格式版本，仍兼容 0.2–0.6 记录。
+这些不是用户可见品牌。不要全局替换它们；变更须另做迁移。0.6.2 未更改项目格式版本，仍兼容 0.2–0.6 记录。
